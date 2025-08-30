@@ -1,34 +1,29 @@
 #!/bin/bash
-# Instalacja RPi Docker Dashboard w /root (Python 3.5 / Stretch)
+# Instalacja RPi Docker Dashboard w /root (zmodyfikowane dla aktualnego systemu)
 
 set -e
 
-echo "🚀 Instalacja RPi Docker Dashboard (Opcja 3)"
+echo "🚀 Instalacja RPi Docker Dashboard"
 
-# 1️⃣ Aktualizacja systemu
-sudo apt update && sudo apt upgrade -y
-
-# 2️⃣ Instalacja potrzebnych pakietów (bez docker.io)
-sudo apt install -y jq wget unzip python3-venv python3-dev
-
-# 3️⃣ Utworzenie katalogu panel w /root
+# 1️⃣ Tworzenie katalogu panel w /root
 mkdir -p /root/panel
 
-# 4️⃣ Utworzenie virtualenv i instalacja Flask kompatybilnego z Python 3.5
-python3 -m venv /root/panel/venv
+# 2️⃣ Utworzenie virtualenv w panelu (używa systemowego python3.9)
+python3.9 -m venv /root/panel/venv
 source /root/panel/venv/bin/activate
-pip install --upgrade pip==20.3.4 setuptools==44.1.1 wheel
-pip install Flask==1.1.4
-deactivate
 
-# 5️⃣ Pobranie panelu z repo
+# 3️⃣ Instalacja potrzebnych pakietów Python
+pip install --upgrade pip setuptools wheel
+pip install flask jq
+
+# 4️⃣ Pobranie panelu z repo
 if [ ! -f /root/panel/app.py ]; then
     echo "Pobieranie plików panelu..."
     wget -O /root/panel/panel.zip "https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/panel.zip"
     unzip -o /root/panel/panel.zip -d /root/panel
 fi
 
-# 6️⃣ Tworzenie skryptu generującego status
+# 5️⃣ Tworzenie skryptu generującego status
 cat <<'EOF' > /root/generate_status.sh
 #!/bin/bash
 STATUS_FILE="/root/panel/status.json"
@@ -54,10 +49,17 @@ EOF
 
 chmod +x /root/generate_status.sh
 
-# 7️⃣ Dodanie crona do aktualizacji statusu co minutę
+# 6️⃣ Dodanie crona do aktualizacji statusu co minutę
 (crontab -l 2>/dev/null; echo "* * * * * /root/generate_status.sh") | crontab -
 
-# 8️⃣ Tworzenie usługi systemd dla dashboarda (wirtualne środowisko)
+# 7️⃣ Pobranie skryptu odinstalowującego
+if [ ! -f /root/uninstall-dashboard.sh ]; then
+    wget -O /root/uninstall-dashboard.sh "https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/uninstall-dashboard.sh"
+    chmod +x /root/uninstall-dashboard.sh
+    echo "✔ Skrypt uninstall-dashboard.sh gotowy do użycia"
+fi
+
+# 8️⃣ Tworzenie usługi systemd dla dashboarda
 SERVICE_FILE="/etc/systemd/system/rpi-dashboard.service"
 sudo bash -c "cat > $SERVICE_FILE" <<EOF
 [Unit]

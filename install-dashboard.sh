@@ -1,74 +1,50 @@
 #!/bin/bash
-set -e
 
-# === Konfiguracja ===
-DASHBOARD_DIR="/root/panel"
-SERVICE_FILE="/etc/systemd/system/rpi-dashboard.service"
-PYTHON_BIN=$(which python3)
+# Aktualizacja repozytoriów dla Debiana Stretch
+echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
+echo "deb http://archive.debian.org/debian-security stretch/updates main contrib non-free" >> /etc/apt/sources.list
 
-echo "🚀 Instalacja RPi Docker Dashboard (Python systemowy)"
+# Aktualizacja i instalacja pakietów
+apt-get update
+apt-get install -y jq wget unzip python3-pip python3.5
 
-# === Tworzenie katalogu dashboardu ===
-mkdir -p "$DASHBOARD_DIR"
-cd "$DASHBOARD_DIR"
+# Instalacja zgodnej wersji Flask dla Python 3.5
+pip3 install flask==1.0.2  # Starsza wersja Flask dla zgodności z Python 3.5
 
-# === Instalacja pip jeśli brak ===
-if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
-    echo "pip nie znaleziony, instalacja get-pip.py..."
-    wget -O get-pip.py https://bootstrap.pypa.io/pip/3.9/get-pip.py
-    sudo "$PYTHON_BIN" get-pip.py
-    rm -f get-pip.py
-fi
+# Instalacja zależności dla SenseCAP M1 (LoRa, jeśli wymagane przez Crankk)
+apt-get install -y libloragw-dev  # Biblioteki dla LoRaWAN, jeśli Crankk tego wymaga
 
-# === Upgrade pip, setuptools, wheel ===
-"$PYTHON_BIN" -m pip install --upgrade pip setuptools wheel
+# Reszta skryptu pozostaje bez zmian, np.:
+mkdir -p /root/panel
+cd /root/panel
+wget -O panel.zip https://github.com/hattimon/rpi4-docker-dashboard/archive/refs/heads/main.zip
+unzip panel.zip
+mv rpi4-docker-dashboard-main/* .
+rm -rf rpi4-docker-dashboard-main panel.zip
 
-# === Instalacja wymaganych pakietów ===
-"$PYTHON_BIN" -m pip install flask psutil docker
+# Pobieranie generate_status.sh i ustawianie crona
+wget -O /root/generate_status.sh https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/generate_status.sh
+chmod +x /root/generate_status.sh
+(crontab -l 2>/dev/null; echo "* * * * * /root/generate_status.sh") | crontab -
 
-# === Pobranie dashboard.py ===
-if [ ! -f "$DASHBOARD_DIR/dashboard.py" ]; then
-    echo "Pobieranie dashboard.py..."
-    wget -O "$DASHBOARD_DIR/dashboard.py" "https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/dashboard.py"
-fi
-
-# === Tworzenie systemd service ===
-echo "Tworzenie service systemd..."
-cat <<EOF | sudo tee "$SERVICE_FILE"
+# Tworzenie usługi systemd
+cat > /etc/systemd/system/rpi-dashboard.service <<EOF
 [Unit]
 Description=RPi Docker Dashboard
-After=network.target docker.service
+After=network.target
 
 [Service]
-Type=simple
-User=root
-WorkingDirectory=$DASHBOARD_DIR
-ExecStart=$PYTHON_BIN $DASHBOARD_DIR/dashboard.py
+ExecStart=/usr/bin/python3 /root/panel/app.py
+WorkingDirectory=/root/panel
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# === Tworzenie uninstall script ===
-cat <<'EOF' > "$DASHBOARD_DIR/uninstall-dashboard.sh"
-#!/bin/bash
-set -e
-SERVICE_FILE="/etc/systemd/system/rpi-dashboard.service"
-echo "🗑️ Odinstalowywanie RPi Docker Dashboard..."
-sudo systemctl stop rpi-dashboard || true
-sudo systemctl disable rpi-dashboard || true
-sudo rm -f "$SERVICE_FILE"
-sudo systemctl daemon-reload
-rm -rf /root/panel
-echo "✅ Dashboard odinstalowany"
-EOF
-chmod +x "$DASHBOARD_DIR/uninstall-dashboard.sh"
+systemctl enable rpi-dashboard
+systemctl start rpi-dashboard
 
-# === Reload systemd i uruchomienie ===
-sudo systemctl daemon-reload
-sudo systemctl enable rpi-dashboard
-sudo systemctl restart rpi-dashboard
-
-echo "✅ Dashboard zainstalowany i uruchomiony!"
-echo "Do uninstallu: $DASHBOARD_DIR/uninstall-dashboard.sh"
+# Pobieranie skryptu odinstalowującego
+wget -O /root/uninstall-dashboard.sh https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/uninstall-dashboard.sh
+chmod +x /root/uninstall-dashboard.sh

@@ -3,29 +3,21 @@ set -e
 
 # === Konfiguracja ===
 DASHBOARD_DIR="/root/panel"
-VENV_DIR="$DASHBOARD_DIR/venv"
 SERVICE_FILE="/etc/systemd/system/rpi-dashboard.service"
 
-echo "🚀 Instalacja RPi Docker Dashboard (Python systemowy + virtualenv)"
+echo "🚀 Instalacja RPi Docker Dashboard (Python systemowy, bez virtualenv)"
 
 # === Tworzenie katalogu dashboardu ===
 mkdir -p "$DASHBOARD_DIR"
 cd "$DASHBOARD_DIR"
 
-# === Tworzenie virtualenv ===
-if [ ! -d "$VENV_DIR" ]; then
-    echo "Tworzenie virtualenv..."
-    python3 -m venv venv
-fi
-
-source "$VENV_DIR/bin/activate"
-
-# === Upgrade pip, setuptools, wheel w venv ===
-pip install --upgrade pip setuptools wheel
+# === Upgrade pip, setuptools, wheel w systemowym Pythonie ===
+python3 -m ensurepip --upgrade 2>/dev/null || true
+python3 -m pip install --upgrade pip setuptools wheel
 
 # === Instalacja wymaganych pakietów ===
 # Flask, psutil, docker
-pip install flask psutil docker
+python3 -m pip install --upgrade flask psutil docker
 
 # === Pobranie dashboardu (jeśli nie ma plików) ===
 # Zakładamy, że dashboard.py jest głównym plikiem
@@ -45,7 +37,7 @@ After=network.target docker.service
 Type=simple
 User=root
 WorkingDirectory=$DASHBOARD_DIR
-ExecStart=$VENV_DIR/bin/python $DASHBOARD_DIR/dashboard.py
+ExecStart=$(which python3) $DASHBOARD_DIR/dashboard.py
 Restart=always
 
 [Install]

@@ -4,36 +4,36 @@ set -e
 # === Konfiguracja ===
 DASHBOARD_DIR="/root/panel"
 SERVICE_FILE="/etc/systemd/system/rpi-dashboard.service"
-UNINSTALL_SCRIPT="$DASHBOARD_DIR/uninstall-dashboard.sh"
+PYTHON_BIN=$(which python3)
 
-echo "🚀 Instalacja RPi Docker Dashboard (Python systemowy, bez virtualenv)"
+echo "🚀 Instalacja RPi Docker Dashboard (Python systemowy)"
 
 # === Tworzenie katalogu dashboardu ===
 mkdir -p "$DASHBOARD_DIR"
 cd "$DASHBOARD_DIR"
 
-# === Sprawdzenie pip ===
-if ! python3 -m pip --version &>/dev/null; then
-    echo "⚠️ Systemowy Python nie ma pip."
-    echo "Zainstaluj pip poleceniem:"
-    echo "    sudo apt update && sudo apt install python3-pip"
-    echo "Po instalacji uruchom ponownie ten skrypt."
-    exit 1
+# === Instalacja pip jeśli brak ===
+if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
+    echo "pip nie znaleziony, instalacja get-pip.py..."
+    wget -O get-pip.py https://bootstrap.pypa.io/pip/3.9/get-pip.py
+    sudo "$PYTHON_BIN" get-pip.py
+    rm -f get-pip.py
 fi
 
 # === Upgrade pip, setuptools, wheel ===
-python3 -m pip install --upgrade pip setuptools wheel
+"$PYTHON_BIN" -m pip install --upgrade pip setuptools wheel
 
 # === Instalacja wymaganych pakietów ===
-python3 -m pip install flask psutil docker
+"$PYTHON_BIN" -m pip install flask psutil docker
 
 # === Pobranie dashboard.py ===
-DASHBOARD_PY="$DASHBOARD_DIR/dashboard.py"
-echo "📥 Pobieranie dashboard.py..."
-wget -O "$DASHBOARD_PY" "https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/dashboard.py"
+if [ ! -f "$DASHBOARD_DIR/dashboard.py" ]; then
+    echo "Pobieranie dashboard.py..."
+    wget -O "$DASHBOARD_DIR/dashboard.py" "https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/dashboard.py"
+fi
 
-# === Tworzenie pliku systemd ===
-echo "🛠️ Tworzenie service systemd..."
+# === Tworzenie systemd service ===
+echo "Tworzenie service systemd..."
 cat <<EOF | sudo tee "$SERVICE_FILE"
 [Unit]
 Description=RPi Docker Dashboard
@@ -43,36 +43,32 @@ After=network.target docker.service
 Type=simple
 User=root
 WorkingDirectory=$DASHBOARD_DIR
-ExecStart=/usr/bin/python3 $DASHBOARD_PY
+ExecStart=$PYTHON_BIN $DASHBOARD_DIR/dashboard.py
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# === Tworzenie uninstall script ===
+cat <<'EOF' > "$DASHBOARD_DIR/uninstall-dashboard.sh"
+#!/bin/bash
+set -e
+SERVICE_FILE="/etc/systemd/system/rpi-dashboard.service"
+echo "🗑️ Odinstalowywanie RPi Docker Dashboard..."
+sudo systemctl stop rpi-dashboard || true
+sudo systemctl disable rpi-dashboard || true
+sudo rm -f "$SERVICE_FILE"
+sudo systemctl daemon-reload
+rm -rf /root/panel
+echo "✅ Dashboard odinstalowany"
+EOF
+chmod +x "$DASHBOARD_DIR/uninstall-dashboard.sh"
+
 # === Reload systemd i uruchomienie ===
 sudo systemctl daemon-reload
 sudo systemctl enable rpi-dashboard
 sudo systemctl restart rpi-dashboard
 
-# === Tworzenie skryptu uninstall ===
-cat <<'EOF' > "$UNINSTALL_SCRIPT"
-#!/bin/bash
-set -e
-DASHBOARD_DIR="/root/panel"
-SERVICE_FILE="/etc/systemd/system/rpi-dashboard.service"
-
-echo "🗑️ Usuwanie RPi Docker Dashboard..."
-
-sudo systemctl stop rpi-dashboard || true
-sudo systemctl disable rpi-dashboard || true
-sudo rm -f "$SERVICE_FILE"
-sudo systemctl daemon-reload
-rm -rf "$DASHBOARD_DIR"
-
-echo "✅ Dashboard odinstalowany."
-EOF
-chmod +x "$UNINSTALL_SCRIPT"
-
 echo "✅ Dashboard zainstalowany i uruchomiony!"
-echo "Do uninstallu: $UNINSTALL_SCRIPT"
+echo "Do uninstallu: $DASHBOARD_DIR/uninstall-dashboard.sh"

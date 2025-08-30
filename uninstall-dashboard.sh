@@ -1,24 +1,20 @@
+cat <<'EOF' > uninstall-dashboard.sh
 #!/bin/bash
-# Skrypt do odinstalowania RPi Docker Dashboard
-
 set -e
+echo "🗑️ Odinstalowywanie RPi Docker Dashboard"
 
-echo "🗑️ Odinstalowywanie RPi Docker Dashboard..."
-
-# 1️⃣ Usunięcie usługi systemd
-if systemctl is-active --quiet rpi-dashboard; then
-    sudo systemctl stop rpi-dashboard
-fi
-if systemctl is-enabled --quiet rpi-dashboard; then
-    sudo systemctl disable rpi-dashboard
-fi
+# Zatrzymanie usługi systemd
+sudo systemctl stop rpi-dashboard || true
+sudo systemctl disable rpi-dashboard || true
 sudo rm -f /etc/systemd/system/rpi-dashboard.service
 sudo systemctl daemon-reload
 
-# 2️⃣ Usunięcie crona aktualizacji statusu
-(crontab -l 2>/dev/null | grep -v "/root/generate_status.sh") | crontab -
-
-# 3️⃣ Usunięcie katalogu panelu i virtualenv
+# Usunięcie katalogu panelu
 rm -rf /root/panel
 
-echo "✅ Dashboard został odinstalowany."
+# Usunięcie crona
+crontab -l 2>/dev/null | grep -v "/root/generate_status.sh" | crontab -
+
+echo "✅ Dashboard odinstalowany."
+EOF
+chmod +x uninstall-dashboard.sh

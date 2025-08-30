@@ -1,34 +1,29 @@
 #!/bin/bash
-# Instalacja RPi Docker Dashboard w /root (zmodyfikowane dla aktualnego systemu)
-
 set -e
-
 echo "🚀 Instalacja RPi Docker Dashboard"
 
-# 1️⃣ Tworzenie katalogu panel w /root
+# Tworzenie katalogu panelu
 mkdir -p /root/panel
 
-# 2️⃣ Utworzenie virtualenv w panelu (używa systemowego python3.9)
+# Tworzenie virtualenv
 python3.9 -m venv /root/panel/venv
 source /root/panel/venv/bin/activate
 
-# 3️⃣ Instalacja potrzebnych pakietów Python
+# Upgrade pip i setuptools w venv
 pip install --upgrade pip setuptools wheel
+
+# Instalacja wymaganych bibliotek w venv
 pip install flask jq
 
-# 4️⃣ Pobranie panelu z repo
-if [ ! -f /root/panel/app.py ]; then
-    echo "Pobieranie plików panelu..."
-    wget -O /root/panel/panel.zip "https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/panel.zip"
-    unzip -o /root/panel/panel.zip -d /root/panel
-fi
+# Pobranie panelu
+wget -O /root/panel/panel.zip "https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/panel.zip"
+unzip -o /root/panel/panel.zip -d /root/panel
 
-# 5️⃣ Tworzenie skryptu generującego status
+# Skrypt generujący status
 cat <<'EOF' > /root/generate_status.sh
 #!/bin/bash
 STATUS_FILE="/root/panel/status.json"
-
-CPU=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100-$1"%"}')
+CPU=$(top -bn1 | grep "Cpu(s)" | awk '{print 100-$8"%"}')
 RAM=$(free | grep Mem | awk '{printf "%.1f%", $3/$2 * 100}')
 TEMP=$(vcgencmd measure_temp 2>/dev/null | cut -d "=" -f2)
 DISK=$(df -h / | tail -1 | awk '{print $5}')
@@ -37,7 +32,6 @@ WIFI_IP=$(ip addr show wlan0 | grep "inet " | awk '{print $2}' | cut -d/ -f1)
 ETH_IP=${ETH_IP:-"brak"}
 WIFI_IP=${WIFI_IP:-"brak"}
 CONTAINERS=$(docker ps --format '{"name":"{{.Names}}","image":"{{.Image}}","status":"{{.Status}}"}' | jq -s '.')
-
 cat <<JSON > $STATUS_FILE
 {
   "system":{"cpu":"$CPU","ram":"$RAM","temp":"$TEMP","disk":"$DISK"},
@@ -46,22 +40,13 @@ cat <<JSON > $STATUS_FILE
 }
 JSON
 EOF
-
 chmod +x /root/generate_status.sh
 
-# 6️⃣ Dodanie crona do aktualizacji statusu co minutę
+# Cron do aktualizacji statusu co minutę
 (crontab -l 2>/dev/null; echo "* * * * * /root/generate_status.sh") | crontab -
 
-# 7️⃣ Pobranie skryptu odinstalowującego
-if [ ! -f /root/uninstall-dashboard.sh ]; then
-    wget -O /root/uninstall-dashboard.sh "https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/uninstall-dashboard.sh"
-    chmod +x /root/uninstall-dashboard.sh
-    echo "✔ Skrypt uninstall-dashboard.sh gotowy do użycia"
-fi
-
-# 8️⃣ Tworzenie usługi systemd dla dashboarda
-SERVICE_FILE="/etc/systemd/system/rpi-dashboard.service"
-sudo bash -c "cat > $SERVICE_FILE" <<EOF
+# Systemd service
+cat <<EOF | sudo tee /etc/systemd/system/rpi-dashboard.service
 [Unit]
 Description=RPi Docker Dashboard
 After=network.target
@@ -76,11 +61,8 @@ User=root
 WantedBy=multi-user.target
 EOF
 
-# 9️⃣ Włączenie i start serwisu
 sudo systemctl daemon-reload
 sudo systemctl enable rpi-dashboard
 sudo systemctl restart rpi-dashboard
 
-echo "✅ Instalacja zakończona."
-echo "📊 Panel dostępny pod adresem: http://$(hostname -I | awk '{print $1}'):8080/"
-echo "🗑️ Jeśli chcesz odinstalować panel, uruchom: /root/uninstall-dashboard.sh"
+echo "✅ Instalacja zakończona. Panel: http://$(hostname -I | awk '{print $1}'):8080/"

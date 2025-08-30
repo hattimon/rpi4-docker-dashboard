@@ -12,7 +12,7 @@ Pokazuje status systemu (CPU, RAM, temperatura, dysk), aktywne kontenery z opcjÄ
 
 ## Instalacja
 ```bash
-wget https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/install-dashboard.sh
+wget -O install-dashboard.sh https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/install-dashboard.sh
 chmod +x install-dashboard.sh
 sudo ./install-dashboard.sh
 ```

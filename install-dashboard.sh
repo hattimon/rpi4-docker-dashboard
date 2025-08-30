@@ -5,7 +5,7 @@ set -e
 DASHBOARD_DIR="/root/panel"
 SERVICE_FILE="/etc/systemd/system/rpi-dashboard.service"
 
-echo "🚀 Instalacja RPi Docker Dashboard (Python systemowy, bez virtualenv)"
+echo "🚀 Instalacja RPi Docker Dashboard (Python systemowy)"
 
 # === Tworzenie katalogu dashboardu ===
 mkdir -p "$DASHBOARD_DIR"
@@ -16,11 +16,9 @@ python3 -m ensurepip --upgrade 2>/dev/null || true
 python3 -m pip install --upgrade pip setuptools wheel
 
 # === Instalacja wymaganych pakietów ===
-# Flask, psutil, docker
 python3 -m pip install --upgrade flask psutil docker
 
 # === Pobranie dashboardu (jeśli nie ma plików) ===
-# Zakładamy, że dashboard.py jest głównym plikiem
 if [ ! -f "$DASHBOARD_DIR/dashboard.py" ]; then
     echo "Pobieranie dashboard.py..."
     wget -O "$DASHBOARD_DIR/dashboard.py" "https://raw.githubusercontent.com/hattimon/rpi4-docker-dashboard/main/dashboard.py"
